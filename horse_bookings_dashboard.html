@@ -1,4 +1,4 @@
-<!-- DASHBOARD_BUILD: 9 -->
+<!-- DASHBOARD_BUILD: 11 -->
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
@@ -214,7 +214,7 @@ button:hover{opacity:0.9;}
           <circle cx="97" cy="47" r="3" fill="var(--surface)"/>
         </svg>
         <h1>لوحة تشغيل رحلات الخيول</h1>
-        <span id="versionBadge" style="background:var(--surface-2);color:var(--ink-soft);border:1px solid var(--line);border-radius:20px;padding:2px 10px;font-size:11px;font-weight:700;font-family:'IBM Plex Mono',monospace;">v9</span>
+        <span id="versionBadge" style="background:var(--surface-2);color:var(--ink-soft);border:1px solid var(--line);border-radius:20px;padding:2px 10px;font-size:11px;font-weight:700;font-family:'IBM Plex Mono',monospace;">v11</span>
       </div>
       <p>حجوزات الحصان بالصحراء والسباحة مع الخيل في البحر الأحمر</p>
     </div>
@@ -4369,14 +4369,24 @@ function renderBookingsView(){
             ${statusBadge}
           </div>
           ${b.option ? `<div class="ticket-subtitle">${escapeHtml(b.option)}</div>` : ''}
-          <div class="ticket-stats">
-            <span>📅 ${b.time||'—'}</span>
-            <span>👥 ${b.participants} ${t('participants')}</span>
-            ${b.reference?`<span class="b-ref">🎫 ${escapeHtml(b.reference)}</span>`:''}
-          </div>
           <div class="ticket-divider"></div>
           <div class="ticket-body">
-            ${(b.customerName || b.phone) ? `<div class="t-label">العميل</div><div class="t-value">${b.customerName?`👤 ${escapeHtml(b.customerName)}`:''}${(b.customerName && b.phone)?' — ':''}${b.phone?`<a href="tel:+${escapeHtml(b.phone)}" style="color:inherit;text-decoration:none;">📞 ${escapeHtml(b.phone)}</a>`:''}</div>` : ''}
+            <div class="t-label">التاريخ / الوقت</div>
+            <div class="t-value">📅 ${b.time||'—'}</div>
+            <div class="t-label">المشاركين</div>
+            <div class="t-value">👥 ${b.participants} ${t('participants')}</div>
+            ${b.reference ? `
+            <div class="t-label">رقم الحجز</div>
+            <div class="t-value"><span class="b-ref">🎫 ${escapeHtml(b.reference)}</span></div>` : ''}
+            ${b.customerName ? `
+            <div class="t-label">العميل</div>
+            <div class="t-value">👤 ${escapeHtml(b.customerName)}</div>` : ''}
+            ${b.phone ? `
+            <div class="t-label">تليفون</div>
+            <div class="t-value"><a href="tel:+${escapeHtml(b.phone)}" style="color:inherit;text-decoration:none;">📞 ${escapeHtml(b.phone)}</a></div>` : ''}
+            ${b.email ? `
+            <div class="t-label">إيميل</div>
+            <div class="t-value" style="direction:ltr;text-align:right;word-break:break-all;">📧 ${escapeHtml(b.email)}</div>` : ''}
             <div class="t-label">السعر</div>
             <div class="t-value">
               <span class="net" style="font-family:'IBM Plex Mono',monospace;color:var(--success);">${fmtMoney(b.priceNet,b.currency)}</span>
