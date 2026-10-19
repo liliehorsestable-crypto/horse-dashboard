@@ -11,24 +11,24 @@
 @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@600;700;800&family=IBM+Plex+Sans+Arabic:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap');
 
 :root{
-  --bg:#E6EFE6;
-  --surface:#F1F7F0;
-  --surface-2:#FBFEFA;
-  --ink:#1C2321;
-  --ink-soft:#586258;
-  --line:#CFE0CE;
+  --bg:#F6F3EC;
+  --surface:#FFFFFF;
+  --surface-2:#FBF9F3;
+  --ink:#1E2A2E;
+  --ink-soft:#5C6E72;
+  --line:#E3DCC9;
   --navy:#0F3D44;
-  --navy-100:#DCE9EA;
-  --teal:#1B6B76;
-  --clay:#BB5B2E;
-  --clay-100:#F3DFD2;
-  --sand:#C9A876;
-  --camel:#8B5E34;
-  --camel-100:#EDE0CF;
-  --success:#3F7D5C;
-  --success-100:#DEEBE2;
-  --danger:#A8402B;
-  --danger-100:#F5DCD5;
+  --navy-100:#DCEEEC;
+  --teal:#126F65;
+  --clay:#C1693F;
+  --clay-100:#F6E4D5;
+  --sand:#D4B483;
+  --camel:#96693A;
+  --camel-100:#F0E2CC;
+  --success:#2F8F6A;
+  --success-100:#DCEFE6;
+  --danger:#C1543A;
+  --danger-100:#F6E0D8;
 }
 *{box-sizing:border-box;}
 body{
@@ -3285,17 +3285,26 @@ async function findHotelFromGmailByReference(reference){
       });
       if(!msgRes.ok) continue;
       const msgData = await msgRes.json();
-      const bodyText = extractPlainTextFromGmailMessage(msgData);
-      if(!bodyText || bodyText.toUpperCase().indexOf(reference.toUpperCase())===-1) continue;
-      const pickupMatch = bodyText.match(/Pickup\s*(?:location)?[:\s]+([\s\S]*?)(?:Open in Google Maps|Price|Open booking|$)/i);
-      if(!pickupMatch) continue;
-      let hotel = pickupMatch[1]
-        .replace(/https?:\/\/\S+/g,' ')
-        .replace(/\[\]\([^)]*\)/g,' ')
-        .replace(/[\r\n]+/g,' ')
-        .replace(/\s{2,}/g,' ')
-        .trim();
-      if(hotel) return hotel;
+      if(!msgData || !msgData.payload) continue;
+      // بنجرب نص الإيميل العادي (text/plain) وكمان النسخة المحوّلة من الـ HTML، ونستخدم أي واحد فيهم
+      // فيه كلمة Pickup فعلاً - بعض إيميلات GetYourGuide بتبعت نسخة plain-text ناقصة أو فاضية.
+      const candidates = [];
+      const plainPart = findGmailPartByMime(msgData.payload, 'text/plain');
+      if(plainPart) candidates.push(plainPart);
+      const htmlPart = findGmailPartByMime(msgData.payload, 'text/html');
+      if(htmlPart) candidates.push(htmlToPlainText(htmlPart));
+      for(const bodyText of candidates){
+        if(!bodyText || bodyText.toUpperCase().indexOf(reference.toUpperCase())===-1) continue;
+        const pickupMatch = bodyText.match(/Pickup\s*(?:location)?[:\s]+([\s\S]*?)(?:Open in Google Maps|Price|Open booking|$)/i);
+        if(!pickupMatch) continue;
+        let hotel = pickupMatch[1]
+          .replace(/https?:\/\/\S+/g,' ')
+          .replace(/\[\]\([^)]*\)/g,' ')
+          .replace(/[\r\n]+/g,' ')
+          .replace(/\s{2,}/g,' ')
+          .trim();
+        if(hotel) return hotel;
+      }
     }
   }catch(e){
     console.error('Gmail hotel lookup failed', e);
@@ -3808,6 +3817,8 @@ document.getElementById('confirmImportBtn').addEventListener('click', async ()=>
       await saveData();
       render();
       msg += ' وتم سحب الفندق من Gmail لـ '+filled+' حجز.';
+    } else {
+      msg += ' (دورنا على الفنادق في Gmail بس محصلناش حاجة جديدة — إما الإيميلات لسه ما وصلتش، أو شكل الإيميل مختلف شوية).';
     }
   }
   alert(msg);
@@ -4371,17 +4382,18 @@ function renderBookingsView(){
               <span class="net" style="font-family:'IBM Plex Mono',monospace;color:var(--success);">${fmtMoney(b.priceNet,b.currency)}</span>
               ${b.priceGross!=null?`<span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--ink-soft);text-decoration:line-through;margin-right:6px;">${fmtMoney(b.priceGross,b.currency)}</span>`:''}
             </div>
-            ${(b.addOns || isPhotoOption(b.option) || b.pickupTime || b.hotelName || b.nationality) ? `
-            <div class="t-label">تفاصيل</div>
-            <div class="t-value">
-              <div class="ticket-badges">
-                ${b.addOns?`<span class="exp-cat" style="background:var(--success-100);color:var(--success);">+ ${escapeHtml(b.addOns)}${isDjiAddon(b.addOns)?` (${t('كاميرا')} -${fmtMoney(djiCameraCostForBooking(b),b.currency)})`:''}</span>`:''}
-                ${isPhotoOption(b.option)?`<span class="exp-cat" style="background:var(--sand);color:var(--navy);">📷 ${t('تصوير فري')} — ${fmtMoney(cameraFeeForBooking(b),'EGP')}</span>`:''}
-                ${b.pickupTime?`<span class="exp-cat">🚐 ${t('بيك أب')}: ${escapeHtml(b.pickupTime)}</span>`:''}
-                ${b.hotelName?`<span class="exp-cat">🏨 ${escapeHtml(b.hotelName)}</span>`:''}
-                ${b.nationality?`<span class="exp-cat">🌍 ${escapeHtml(b.nationality)}</span>`:''}
-              </div>
-            </div>` : ''}
+            ${(b.hotelName || b.pickupTime) ? `
+            <div class="t-label">الفندق / بيك أب</div>
+            <div class="t-value">${b.pickupTime?`⏰ ${escapeHtml(b.pickupTime)}`:''}${(b.pickupTime && b.hotelName)?' — ':''}${b.hotelName?`🏨 ${escapeHtml(b.hotelName)}`:''}</div>` : ''}
+            ${b.nationality ? `
+            <div class="t-label">الجنسية</div>
+            <div class="t-value">🌍 ${escapeHtml(b.nationality)}</div>` : ''}
+            ${isPhotoOption(b.option) ? `
+            <div class="t-label">تصوير</div>
+            <div class="t-value">📷 ${t('تصوير فري')} — ${fmtMoney(cameraFeeForBooking(b),'EGP')}</div>` : ''}
+            ${b.addOns ? `
+            <div class="t-label">إضافات</div>
+            <div class="t-value">+ ${escapeHtml(b.addOns)}${isDjiAddon(b.addOns)?` (${t('كاميرا')} -${fmtMoney(djiCameraCostForBooking(b),b.currency)})`:''}</div>` : ''}
           </div>
           <div class="ticket-footer">
             <button class="ghost ${isCancelled?'active-status':''}" data-status="cancelled" data-idx="${idx}" style="font-size:11px;padding:4px 8px;">${isCancelled?'إلغاء التحديد':'كنسيل'}</button>
