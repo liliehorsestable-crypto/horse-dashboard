@@ -1,4 +1,4 @@
-<!-- DASHBOARD_BUILD: 13 -->
+<!-- DASHBOARD_BUILD: 14 -->
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
@@ -235,7 +235,7 @@ button:hover{opacity:0.92;}
           <circle cx="97" cy="47" r="3" fill="var(--surface)"/>
         </svg>
         <h1>Stable Lilie Dashboard</h1>
-        <span id="versionBadge" style="background:var(--surface-2);color:var(--ink-soft);border:1px solid var(--line);border-radius:20px;padding:2px 10px;font-size:11px;font-weight:700;font-family:'DM Mono',monospace;">v13</span>
+        <span id="versionBadge" style="background:var(--surface-2);color:var(--ink-soft);border:1px solid var(--line);border-radius:20px;padding:2px 10px;font-size:11px;font-weight:700;font-family:'DM Mono',monospace;">v14</span>
       </div>
       <p>حجوزات الحصان بالصحراء والسباحة مع الخيل في البحر الأحمر</p>
     </div>
@@ -1100,6 +1100,10 @@ const AR_EN = {
   'اكتب سعر البيع الأول عشان تعرف تحط نفس القيمة في الصافي':'Enter the gross price first so the same value can be set as net',
   'تكلفة تشغيل الهورس - من أول الشهر لحد النهاردة':'Horse Ops Cost - from the start of the month to today',
   'بتتحدث يوميًا':'updates daily',
+  'تكلفة تشغيل الجمال - من أول الشهر لحد النهاردة':'Camel Ops Cost - from the start of the month to today',
+  'متوقع للجمال لو باقي حجوزات الشهر اتنفذت كلها (للمعلومية بس، مش داخل في المصاريف)':'Camel projection if all remaining bookings this month run (info only, not in expenses)',
+  'هورس':'horse',
+  'جمال':'camel',
   'مشارك':'participants',
   'تصوير فري':'Free Photo',
   'كاميرا':'camera',
@@ -2400,6 +2404,7 @@ function renderCheckInReminders(){
 // تكلفة تشغيل الهورس التلقائية لحجز واحد
 function horseOpsCostForBooking(b){
   if(b.status==='cancelled' || b.status==='no_show') return 0; // العميل مش نفذ الرحلة، فمفيش تشغيل هورس فعلي
+  if(b.type==='camel') return 0; // رحلات الجمال ليها حساب منفصل (camelOpsCostForBooking)
   if(b.date >= NEW_PRICING_CUTOFF){
     const rule = getNewRuleFor(b.option);
     if(rule) return rule.rate * (b.participants||0);
@@ -2407,6 +2412,14 @@ function horseOpsCostForBooking(b){
   if(b.type!=='sea' && b.type!=='desert') return 0;
   const hours = parseHoursFromOption(b.option) || 1;
   return horseOpsHourlyRate(b.type, hours) * (b.participants||0);
+}
+// تكلفة تشغيل الجمال التلقائية لحجز واحد - منفصلة عن الهورس، بنفس أسعار NEW_OPTION_RATES بتاعة الجمال
+function camelOpsCostForBooking(b){
+  if(b.type!=='camel') return 0;
+  if(b.status==='cancelled' || b.status==='no_show') return 0;
+  if(b.date < NEW_PRICING_CUTOFF) return 0; // نفس منطق الهورس: أسعار الجمال جزء من نظام التسعير الجديد
+  const rule = getNewRuleFor(b.option);
+  return rule ? rule.rate * (b.participants||0) : 0;
 }
 // أي أوبشن فيه تصوير فري (زي "Special Offer: 2-Hour Horse Ride & Free photos Without Swim") - للقواعد القديمة بس
 function isPhotoOption(optionText){
@@ -2483,7 +2496,11 @@ function computeMonthStats(mKey){
   const autoOpsCostProjected = isCurrentMonth
     ? monthBookings.reduce((s,b)=> s + horseOpsCostForBooking(b), 0)
     : null;
-  const dailyOpsBefore = dailyOpsManual + autoOpsCostTotal;
+  const autoCamelCostTotal = monthBookings.filter(b=>b.date<=todayStr()).reduce((s,b)=> s + camelOpsCostForBooking(b), 0);
+  const autoCamelCostProjected = isCurrentMonth
+    ? monthBookings.reduce((s,b)=> s + camelOpsCostForBooking(b), 0)
+    : null;
+  const dailyOpsBefore = dailyOpsManual + autoOpsCostTotal + autoCamelCostTotal;
   const transportReduction = collectionsTotal + transportDeductionsTotal;
   categoryTotals[transportKey] = Math.max(0, transportBefore - transportReduction);
   categoryTotals[dailyOpsKey] = Math.max(0, dailyOpsBefore - profitCollectionsTotal - horseOpsDeductionsTotal);
@@ -2499,7 +2516,7 @@ function computeMonthStats(mKey){
     cancelledBookings, noShowBookings, noShowRevenue,
     photoBookings, cameraFeeTotal, djiBookings, djiCameraCostCur, djiCameraCostInExpCur,
     categoryTotals, transportKey, dailyOpsKey, transportBefore, dailyOpsManual, isCurrentMonth,
-    autoOpsCostTotal, autoOpsCostProjected, dailyOpsBefore, transportReduction,
+    autoOpsCostTotal, autoOpsCostProjected, autoCamelCostTotal, autoCamelCostProjected, dailyOpsBefore, transportReduction,
     totalExpenses, revenueInExpCur, profit
   };
 }
@@ -2639,6 +2656,7 @@ function exportExcelForAccountant(scope, scopeValue){
     'إضافات (Add-ons)': b.addOns||'',
     'وقت البيك أب': b.pickupTime||'',
     'تكلفة تشغيل الهورس': horseOpsCostForBooking(b),
+    'تكلفة تشغيل الجمال': camelOpsCostForBooking(b),
     'تحصيل كاميرا (تصوير فري)': cameraFeeForBooking(b),
     'تحصيل كاميرا DJI': djiCameraCostForBooking(b)
   }));
@@ -2688,6 +2706,7 @@ function exportExcelForAccountant(scope, scopeValue){
         'خصومات موظفين': s.staffDeductionsTotal,
         'خصومات تشغيل الخيل': s.horseOpsDeductionsTotal,
         'تكلفة تشغيل الهورس (لحد النهاردة)': s.autoOpsCostTotal,
+        'تكلفة تشغيل الجمال (لحد النهاردة)': s.autoCamelCostTotal,
         'إيرادات نو شو (فلوس فاضلة معاك)': s.noShowRevenue,
         'عدد حجوزات نو شو': s.noShowBookings.length,
         'عدد حجوزات كنسيل (اتشالت من الإيراد بالكامل)': s.cancelledBookings.length,
@@ -4681,7 +4700,7 @@ function renderMonthlyView(){
     cancelledBookings, noShowBookings, noShowRevenue,
     photoBookings, cameraFeeTotal, djiBookings, djiCameraCostCur,
     categoryTotals, transportKey, dailyOpsKey, transportBefore, dailyOpsManual, isCurrentMonth,
-    autoOpsCostTotal, autoOpsCostProjected, dailyOpsBefore, transportReduction,
+    autoOpsCostTotal, autoOpsCostProjected, autoCamelCostTotal, autoCamelCostProjected, dailyOpsBefore, transportReduction,
     totalExpenses, profit
   } = s;
 
@@ -4705,6 +4724,8 @@ function renderMonthlyView(){
     <div class="stat-card"><div class="num mono">${fmtMoney(horseOpsDeductionsTotal,expCur)}</div><div class="lbl">خصومات مخصومة من تشغيل الخيل</div></div>
     <div class="stat-card expense"><div class="num mono">${fmtMoney(autoOpsCostTotal,expCur)}</div><div class="lbl">${t('تكلفة تشغيل الهورس - من أول الشهر لحد النهاردة')}${isCurrentMonth?' ('+t('بتتحدث يوميًا')+')':''}</div></div>
     ${isCurrentMonth ? `<div class="stat-card"><div class="num mono">${fmtMoney(autoOpsCostProjected,expCur)}</div><div class="lbl">متوقع لو باقي حجوزات الشهر اتنفذت كلها (للمعلومية بس، مش داخل في المصاريف)</div></div>` : ''}
+    <div class="stat-card expense"><div class="num mono">${fmtMoney(autoCamelCostTotal,expCur)}</div><div class="lbl">🐪 ${t('تكلفة تشغيل الجمال - من أول الشهر لحد النهاردة')}${isCurrentMonth?' ('+t('بتتحدث يوميًا')+')':''}</div></div>
+    ${isCurrentMonth ? `<div class="stat-card"><div class="num mono">${fmtMoney(autoCamelCostProjected,expCur)}</div><div class="lbl">🐪 ${t('متوقع للجمال لو باقي حجوزات الشهر اتنفذت كلها (للمعلومية بس، مش داخل في المصاريف)')}</div></div>` : ''}
     <div class="stat-card money"><div class="num mono">${fmtMoney(noShowRevenue,cur)}</div><div class="lbl">${t('إيرادات حجوزات نو شو')} (${noShowBookings.length} ${t('حجز - فلوسها فاضلة معاك، مكسب صافي')})</div></div>
     <div class="stat-card expense"><div class="num mono">${cancelledBookings.length}</div><div class="lbl">حجوزات كنسيل هذا الشهر (اتشالت من الإيراد بالكامل - GetYourGuide بيرجع فلوسها للعميل)</div></div>
     <div class="stat-card expense"><div class="num mono">${fmtMoney(cameraFeeTotal,expCur)}</div><div class="lbl">📷 ${t('تحصيل الكاميرا (250 ج/فرد)')} - ${photoBookings.length} ${t('حجز فيه تصوير فري، منفصل عن الإيراد ومخصوم منه')}</div></div>
@@ -4726,8 +4747,8 @@ function renderMonthlyView(){
           ? `<div class="lbl" style="color:var(--success);margin-top:4px;">${t('قبل الخصم:')} ${fmtMoney(transportBefore,expCur)} — ${t('بعد خصم')} ${fmtMoney(transportReduction,expCur)} ${t('(تحصيل ترانسفير + خصومات سواقين)')}</div>`
           : `<div class="lbl" style="margin-top:4px;">${t('مفيش تحصيل أو خصم سواقين اتخصم الشهر ده')}</div>`;
       } else if(k===dailyOpsKey){
-        sub = (autoOpsCostTotal>0 || profitCollectionsTotal>0)
-          ? `<div class="lbl" style="color:var(--success);margin-top:4px;">${t('يدوي:')} ${fmtMoney(dailyOpsManual,expCur)} ${t('+ تلقائي من الحجوزات:')} ${fmtMoney(autoOpsCostTotal,expCur)} — ${t('بعد خصم')} ${fmtMoney(profitCollectionsTotal,expCur)} ${t('تحصيل ذاتي')}</div>`
+        sub = (autoOpsCostTotal>0 || autoCamelCostTotal>0 || profitCollectionsTotal>0)
+          ? `<div class="lbl" style="color:var(--success);margin-top:4px;">${t('يدوي:')} ${fmtMoney(dailyOpsManual,expCur)} ${t('+ تلقائي من الحجوزات:')} ${fmtMoney(autoOpsCostTotal,expCur)} ${t('هورس')} + ${fmtMoney(autoCamelCostTotal,expCur)} ${t('جمال')} — ${t('بعد خصم')} ${fmtMoney(profitCollectionsTotal,expCur)} ${t('تحصيل ذاتي')}</div>`
           : `<div class="lbl" style="margin-top:4px;">${t('مفيش تكلفة تشغيل تلقائية أو تحصيل ذاتي الشهر ده')}</div>`;
       }
       return `<div class="stat-card expense"><div class="num mono">${fmtMoney(val,expCur)}</div><div class="lbl">${escapeHtml(k)}</div>${sub}</div>`;
